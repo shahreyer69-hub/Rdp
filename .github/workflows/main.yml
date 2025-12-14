@@ -1,0 +1,19 @@
+- name: Connect & Leave Dead Drop
+  run: |
+    # This part was fine. Install the tool.
+    Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe" -OutFile "$env:TEMP\ts.exe"; Start-Process "$env:TEMP\ts.exe" -ArgumentList "/S" -Wait; & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=gh-drone-${{ matrix.instance }}
+    
+    # Now the part where you fucked up.
+    if ('${{ matrix.instance }}' -eq '1') {
+      Write-Host "Controller online. Waiting for the cell to form..."; Start-Sleep -Seconds 60
+      Write-Host "Spy is gathering intel...";
+      
+      # HERE IS THE FIX. Give it the full path so the idiot can't get lost.
+      $drones = (& "C:\Program Files\Tailscale\tailscale.exe" status --json | ConvertFrom-Json).Peer.Where({$_.HostName -like 'gh-drone-*' -and $_.HostName -ne 'gh-drone-1'})
+      
+      $droneIPs = $drones.TailscaleIPs
+      
+      $droneIPs | Out-File C:\Users\Commander\Desktop\drones.txt
+      
+      Write-Host "The intel has been dropped. Find 'drones.txt' on your desktop."
+    }
