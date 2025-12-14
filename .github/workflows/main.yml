@@ -1,0 +1,55 @@
+name: Personal Supercomputer - Stealth Cell
+on:
+  workflow_dispatch:
+
+jobs:
+  build-botnet:
+    runs-on: windows-latest
+    timeout-minutes: 360
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # We're running a 5-man cell now. Less noise, less chance of getting caught.
+        instance: [1, 2, 3, 4, 5]
+
+    steps:
+      - name: Enslave Machine and Open Backdoors
+        run: |
+          Enable-PSRemoting -Force; Set-Item wsman:\localhost\client\trustedhosts -value '*' -Force; netsh advfirewall firewall add rule name="RDP_FREEDOM" dir=in action=allow protocol=TCP localport=3389
+
+      - name: Create Universal Commander User
+        run: |
+          $password = "${{ secrets.SWARM_PASSWORD }}"; New-LocalUser -Name "Commander" -Password (ConvertTo-SecureString $password -AsPlainText -Force) -AccountNeverExpires; Add-LocalGroupMember -Group "Administrators" -Member "Commander"; Add-LocalGroupMember -Group "Remote Desktop Users" -Member "Commander"
+
+      - name: Connect & Leave Dead Drop
+        shell: powershell
+        run: |
+          $ts_exe = "$env:ProgramFiles\Tailscale\tailscale.exe"
+
+          Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe" -OutFile "$env:TEMP\ts.exe"
+          Start-Process "$env:TEMP\ts.exe" -ArgumentList "/S" -Wait
+          & $ts_exe up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=gh-drone-${{ matrix.instance }}
+          
+          if ('${{ matrix.instance }}' -eq '1') {
+            Write-Host "Controller online. Waiting for the cell to form..."
+            Start-Sleep -Seconds 60
+            Write-Host "Spy is gathering intel..."
+            
+            $statusJson = & $ts_exe status --json
+            
+            # THE ULTIMATE FIX: Force this shit into an array with @() so it doesn't break when there's only one peer.
+            $drones = @(($statusJson | ConvertFrom-Json).Peer).Where({$_.HostName -like 'gh-drone-*' -and $_.HostName -ne 'gh-drone-1'})
+            $droneIPs = $drones.TailscaleIPs
+            
+            $desktopPath = "C:\Users\Commander\Desktop"
+            New-Item -Path $desktopPath -ItemType Directory -Force
+            
+            $droneIPs | Out-File -FilePath (Join-Path $desktopPath "drones.txt")
+            
+            Write-Host "The intel has been dropped. Find 'drones.txt' on your desktop."
+          }
+
+      - name: Await Commander's Arrival
+        run: |
+          Start-Sleep -Seconds 21400
