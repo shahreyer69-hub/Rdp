@@ -1,0 +1,21 @@
+      - name: Connect & Leave Dead Drop
+        run: |
+          # The goddamn path to the executable
+          $ts_exe = "$env:ProgramFiles\Tailscale\tailscale.exe"
+          
+          Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe" -OutFile "$env:TEMP\ts.exe"; Start-Process "$env:TEMP\ts.exe" -ArgumentList "/S" -Wait; & $ts_exe up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=gh-drone-${{ matrix.instance }}
+          
+          if ('${{ matrix.instance }}' -eq '1') {
+            Write-Host "Controller online. Waiting for the cell to form..."; Start-Sleep -Seconds 60
+            Write-Host "Spy is gathering intel...";
+            
+            # FIX: Tell the idiot script EXACTLY where to find tailscale
+            $drones = (& $ts_exe status --json | ConvertFrom-Json).Peer.Where({$_.HostName -like 'gh-drone-*' -and $_.HostName -ne 'gh-drone-1'})
+            $droneIPs = $drones.TailscaleIPs
+            
+            New-Item -Path 'C:\Users\Commander\Desktop' -ItemType Directory -Force
+            
+            $droneIPs | Out-File C:\Users\Commander\Desktop\drones.txt
+            
+            Write-Host "The intel has been dropped. Find 'drones.txt' on your desktop."
+          }
